@@ -1,0 +1,151 @@
+import random
+
+def generate_maze(row,col):
+    maze=[[1 for x in range(col)] for y in range(row)]
+    def path(r,c):
+        maze[r][c]=0
+        direction=[
+            (-2,0),
+            (2,0),
+            (0,-2),
+            (0,2)
+        ]
+        random.shuffle(direction)
+        for dir_row,dir_col in direction:
+            new_r=r+dir_row
+            new_c=c+dir_col
+            if 0<new_r<row-1 and 0<new_c<col-1:
+                if maze[new_r][new_c]==1:
+                    maze[r+dir_row//2][c+dir_col//2] = 0
+                    path(new_r,new_c)
+    correct_path = []
+    
+    visitedCell = [[False for _ in range(col)] for _ in range(row)]
+
+    def correctPath(r, c):
+        if (r, c) == (row - 2, col - 2):
+            correct_path.append((r, c))
+            return True
+        if maze[r][c] == 1 or visitedCell[r][c]:
+            return False
+        visitedCell[r][c]=True
+        if (correctPath(r + 1, c) or correctPath(r - 1, c) or
+                correctPath(r, c + 1) or correctPath(r, c - 1)):
+            correct_path.append((r, c))
+            return True
+        return False
+    
+    path(1,1)
+    correctPath(1,1)
+    print(correct_path)
+    return(maze,correct_path)
+
+(* def red_herring(maze,row,col):
+    
+    while True:
+        r=random.randrange(1,row-1)
+        c=random.randrange(1,col-1)
+        if maze[r][c]!=1:
+            continue
+        if(maze[r-1][c]==0 and maze[r+1][c]==0):
+            maze[r][c]=0
+            return
+        if(maze[r][c-1]==0 and maze[r][c+1]==0):
+            maze[r][c]=0
+            return *)
+
+(* def red_herring(maze,correct_path):
+    x,y=random.choice(correct_path)
+    direction=[
+                (-1,0),
+                (1,0),
+                (0,-1),
+                (0,1)
+            ]
+    random.shuffle(direction)
+    for dx,dy in direction.items():
+        x1=x+dx
+        y1=y+dy
+        if(0<=x1<=len(maze) and 0<=y1<=len(maze[0])):
+            if(maze[x1][y1] not in correct_path and maze[x1][y1]==1):
+                maze[x+dx//2][y+dy//2]=0
+                maze[x1][y1]=0 *)
+                
+    
+
+
+
+            
+        
+def display_maze(maze, player_row, player_col, goal_row, goal_col,visible_rad=None):
+    for r in range(len(maze)):
+        line = ""
+        for c in range(len(maze[0])):
+            if visible_rad is not None and max(abs(r-player_row), abs(c-player_col)) > visible_rad:
+                line += "? "
+                continue
+            if r == player_row and c == player_col:
+                line += "P "
+            elif r == goal_row and c == goal_col:
+                line += "G "
+            elif maze[r][c] == 1:
+                line += "# "
+            else:
+                line += "  "
+        print(line)
+        
+        
+
+    
+
+
+def player_movement(move, maze, player_row, player_col):
+    moves = { "w": (-1, 0), "a": (0, -1), "s": (1, 0), "d"
+             : (0, 1) }
+    if move not in moves: return None 
+    dr, dc = moves[move] 
+    new_r = player_row + dr 
+    new_c = player_col + dc 
+    if (new_r <= 0 or new_c <= 0 or new_r >= len(maze) - 1 or new_c >= len(maze[0]) - 1):
+        return None 
+    if maze[new_r][new_c] == 1:
+        return None
+    return new_r, new_c
+
+def main(): 
+    rows = 31
+    cols = 31
+    maze,correct_path = generate_maze(rows, cols) 
+    player_row = 1 
+    player_col = 1 
+    goal_row = rows - 2 
+    goal_col = cols - 2 
+    moves_made = 0 
+    while True: 
+        print("\033[H\033[J", end="") 
+        print("===== MAZE GAME =====") 
+        print("W = Up | A = Left | S = Down | D = Right") 
+        print() 
+        display_maze( maze, player_row, player_col, goal_row, goal_col ) 
+        print() 
+        print("Moves:", moves_made) 
+        if player_row == goal_row and player_col == goal_col: 
+            print() 
+            print("YOU WON!") 
+            print("Total moves:", moves_made) 
+            break 
+        move = input("Enter your move: ").lower() 
+        result = player_movement( move, maze, player_row, player_col ) 
+        if result is None: 
+            print() 
+            print("Invalid move!") 
+            print("GAME OVER") 
+            break 
+        player_row, player_col = result 
+        moves_made += 1
+        
+        
+
+
+
+main()
