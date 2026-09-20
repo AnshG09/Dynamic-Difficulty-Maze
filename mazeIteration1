@@ -1,87 +1,140 @@
 import random
+from collections import deque
 
-def generate_maze(row,col):
-    maze=[[1 for x in range(col)] for y in range(row)]
-    def path(r,c):
-        maze[r][c]=0
-        direction=[
-            (-2,0),
-            (2,0),
-            (0,-2),
-            (0,2)
-        ]
+
+def generate_maze(row, col):
+    """Build a perfect maze (exactly one route between any two points)."""
+    maze = [[1 for _ in range(col)] for _ in range(row)]
+
+    def carve(r, c):
+        maze[r][c] = 0
+        direction = [(-2, 0), (2, 0), (0, -2), (0, 2)]
         random.shuffle(direction)
-        for dir_row,dir_col in direction:
-            new_r=r+dir_row
-            new_c=c+dir_col
-            if 0<new_r<row-1 and 0<new_c<col-1:
-                if maze[new_r][new_c]==1:
-                    maze[r+dir_row//2][c+dir_col//2] = 0
-                    path(new_r,new_c)
-    correct_path = []
-    
-    visitedCell = [[False for _ in range(col)] for _ in range(row)]
+        for dir_row, dir_col in direction:
+            new_r = r + dir_row
+            new_c = c + dir_col
+            if 0 < new_r < row - 1 and 0 < new_c < col - 1:
+                if maze[new_r][new_c] == 1:
+                    maze[r + dir_row // 2][c + dir_col // 2] = 0
+                    carve(new_r, new_c)
 
-    def correctPath(r, c):
-        if (r, c) == (row - 2, col - 2):
-            correct_path.append((r, c))
-            return True
-        if maze[r][c] == 1 or visitedCell[r][c]:
-            return False
-        visitedCell[r][c]=True
-        if (correctPath(r + 1, c) or correctPath(r - 1, c) or
-                correctPath(r, c + 1) or correctPath(r, c - 1)):
-            correct_path.append((r, c))
-            return True
-        return False
-    
-    path(1,1)
-    correctPath(1,1)
-    print(correct_path)
-    return(maze,correct_path)
-
-(* def red_herring(maze,row,col):
-    
-    while True:
-        r=random.randrange(1,row-1)
-        c=random.randrange(1,col-1)
-        if maze[r][c]!=1:
-            continue
-        if(maze[r-1][c]==0 and maze[r+1][c]==0):
-            maze[r][c]=0
-            return
-        if(maze[r][c-1]==0 and maze[r][c+1]==0):
-            maze[r][c]=0
-            return *)
-
-(* def red_herring(maze,correct_path):
-    x,y=random.choice(correct_path)
-    direction=[
-                (-1,0),
-                (1,0),
-                (0,-1),
-                (0,1)
-            ]
-    random.shuffle(direction)
-    for dx,dy in direction.items():
-        x1=x+dx
-        y1=y+dy
-        if(0<=x1<=len(maze) and 0<=y1<=len(maze[0])):
-            if(maze[x1][y1] not in correct_path and maze[x1][y1]==1):
-                maze[x+dx//2][y+dy//2]=0
-                maze[x1][y1]=0 *)
-                
-    
+    carve(1, 1)
+    return maze
 
 
+def solve_maze(maze, start, goal):
+    """BFS. Returns the SHORTEST route from start to goal, or [] if none."""
+    rows = len(maze)
+    cols = len(maze[0])
+    came_from = {start: None}
+    queue = deque([start])
 
-            
-        
-def display_maze(maze, player_row, player_col, goal_row, goal_col,visible_rad=None):
+    while queue:
+        current = queue.popleft()
+        if current == goal:
+            break
+        r, c = current
+        for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            nxt = (r + dr, c + dc)
+            nr, nc = nxt
+            if 0 <= nr < rows and 0 <= nc < cols:
+                if maze[nr][nc] == 0 and nxt not in came_from:
+                    came_from[nxt] = current
+                    queue.append(nxt)
+
+    if goal not in came_from:
+        return []
+
+    path = []
+    current = goal
+    while current is not None:
+        path.append(current)
+        current = came_from[current]
+    path.reverse()
+    return path
+
+
+def add_red_herrings(maze, correct_path, count):
+    """Knock out walls between two open cells to create loops / false forks.
+
+    Prefers walls next to the correct path, so the player actually meets them.
+    Returns how many were opened.
+    """
+    rows = len(maze)
+    cols = len(maze[0])
+    path_cells = set(correct_path)
+
+    near_path = []
+    elsewhere = []
+
+    for r in range(1, rows - 1):
+        for c in range(1, cols - 1):
+            if maze[r][c] != 1:
+                continue
+
+            if maze[r - 1][c] == 0 and maze[r + 1][c] == 0:
+                sides = [(r - 1, c), (r + 1, c)]
+            elif maze[r][c - 1] == 0 and maze[r][c + 1] == 0:
+                sides = [(r, c - 1), (r, c + 1)]
+            else:
+                continue
+
+            if sides[0] in path_cells or sides[1] in path_cells:
+                near_path.append((r, c))
+            else:
+                elsewhere.append((r, c))
+
+    random.shuffle(near_path)
+    random.shuffle(elsewhere)
+
+    opened = 0
+    for r, c in near_path + elsewhere:
+        if opened >= count:
+            break
+        maze[r][c] = 0
+        opened += 1
+    return opened
+
+
+def count_dead_ends(maze):
+    """The natural red herrings that were already in the maze."""
+    rows = len(maze)
+    cols = len(maze[0])
+    total = 0
+    for r in range(1, rows - 1):
+        for c in range(1, cols - 1):
+            if maze[r][c] != 0:
+                continue
+            open_neighbours = 0
+            for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                if maze[r + dr][c + dc] == 0:
+                    open_neighbours += 1
+            if open_neighbours == 1:
+                total += 1
+    return total
+
+
+def build_level(rows, cols, herring_count):
+    """Generate a maze, add red herrings, then find the real shortest path."""
+    maze = generate_maze(rows, cols)
+    start = (1, 1)
+    goal = (rows - 2, cols - 2)
+
+    first_path = solve_maze(maze, start, goal)
+    added = add_red_herrings(maze, first_path, herring_count)
+
+    # IMPORTANT: re-solve AFTER adding herrings, the shortest route may have changed
+    correct_path = solve_maze(maze, start, goal)
+    return maze, correct_path, added
+
+
+def display_maze(maze, player_row, player_col, goal_row, goal_col,
+                 visible_rad=None, reveal_path=None):
+    reveal = set(reveal_path) if reveal_path else set()
     for r in range(len(maze)):
         line = ""
         for c in range(len(maze[0])):
-            if visible_rad is not None and max(abs(r-player_row), abs(c-player_col)) > visible_rad:
+            if visible_rad is not None and max(abs(r - player_row), abs(c - player_col)) > visible_rad:
                 line += "? "
                 continue
             if r == player_row and c == player_col:
@@ -90,62 +143,67 @@ def display_maze(maze, player_row, player_col, goal_row, goal_col,visible_rad=No
                 line += "G "
             elif maze[r][c] == 1:
                 line += "# "
+            elif (r, c) in reveal:
+                line += ". "
             else:
                 line += "  "
         print(line)
-        
-        
-
-    
 
 
 def player_movement(move, maze, player_row, player_col):
-    moves = { "w": (-1, 0), "a": (0, -1), "s": (1, 0), "d"
-             : (0, 1) }
-    if move not in moves: return None 
-    dr, dc = moves[move] 
-    new_r = player_row + dr 
-    new_c = player_col + dc 
-    if (new_r <= 0 or new_c <= 0 or new_r >= len(maze) - 1 or new_c >= len(maze[0]) - 1):
-        return None 
+    """Returns the new position, or None if the move is blocked/invalid."""
+    moves = {"w": (-1, 0), "a": (0, -1), "s": (1, 0), "d": (0, 1)}
+    if move not in moves:
+        return None
+    dr, dc = moves[move]
+    new_r = player_row + dr
+    new_c = player_col + dc
+    if new_r <= 0 or new_c <= 0 or new_r >= len(maze) - 1 or new_c >= len(maze[0]) - 1:
+        return None
     if maze[new_r][new_c] == 1:
         return None
     return new_r, new_c
 
-def main(): 
+
+def main():
     rows = 31
     cols = 31
-    maze,correct_path = generate_maze(rows, cols) 
-    player_row = 1 
-    player_col = 1 
-    goal_row = rows - 2 
-    goal_col = cols - 2 
-    moves_made = 0 
-    while True: 
-        print("\033[H\033[J", end="") 
-        print("===== MAZE GAME =====") 
-        print("W = Up | A = Left | S = Down | D = Right") 
-        print() 
-        display_maze( maze, player_row, player_col, goal_row, goal_col ) 
-        print() 
-        print("Moves:", moves_made) 
-        if player_row == goal_row and player_col == goal_col: 
-            print() 
-            print("YOU WON!") 
-            print("Total moves:", moves_made) 
-            break 
-        move = input("Enter your move: ").lower() 
-        result = player_movement( move, maze, player_row, player_col ) 
-        if result is None: 
-            print() 
-            print("Invalid move!") 
-            print("GAME OVER") 
-            break 
-        player_row, player_col = result 
-        moves_made += 1
-        
-        
+    herring_count = 12          # later: tie this to your difficulty value
 
+    maze, correct_path, added = build_level(rows, cols, herring_count)
+
+    player_row, player_col = 1, 1
+    goal_row, goal_col = rows - 2, cols - 2
+    moves_made = 0
+    bumps = 0                   # wall hits -- feed this into your scoring later
+
+    while True:
+        print("\033[H\033[J", end="")
+        print("===== MAZE GAME =====")
+        print("W = Up | A = Left | S = Down | D = Right")
+        print()
+        display_maze(maze, player_row, player_col, goal_row, goal_col)
+        print()
+        print("Moves:", moves_made, "| Wall hits:", bumps)
+        print("Shortest possible:", len(correct_path) - 1,
+              "| Loops added:", added,
+              "| Dead ends:", count_dead_ends(maze))
+
+        if player_row == goal_row and player_col == goal_col:
+            print()
+            print("YOU WON!")
+            print("Total moves:", moves_made, "(perfect was", len(correct_path) - 1, ")")
+            break
+
+        move = input("Enter your move: ").lower()
+        result = player_movement(move, maze, player_row, player_col)
+
+        if result is None:
+            bumps += 1
+            continue
+
+        player_row, player_col = result
+        moves_made += 1
 
 
 main()
