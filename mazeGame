@@ -1,0 +1,361 @@
+
+import random
+import time
+
+
+# --------------------------------------------------
+# 1. MAZE GENERATION
+# --------------------------------------------------
+
+def generate_maze(rows, cols):
+    maze = [[1 for _ in range(cols)] for _ in range(rows)]
+
+    maze[1][1] = 0
+
+    def carve_path(row, col):
+        directions = [(0, 2), (0, -2), (2, 0), (-2, 0)]
+        random.shuffle(directions)
+
+        for dr, dc in directions:
+            new_row = row + dr
+            new_col = col + dc
+
+            if (
+                1 <= new_row < rows - 1
+                and 1 <= new_col < cols - 1
+                and maze[new_row][new_col] == 1
+            ):
+                maze[row + dr // 2][col + dc // 2] = 0
+                maze[new_row][new_col] = 0
+
+                carve_path(new_row, new_col)
+
+    carve_path(1, 1)
+
+    return maze
+
+
+# --------------------------------------------------
+# 2. SHORTEST PATH USING BFS
+# --------------------------------------------------
+
+def minimum_steps(maze, start, goal):
+    rows = len(maze)
+    cols = len(maze[0])
+
+    queue = [(start[0], start[1], 0)]
+    front = 0
+    visited = {start}
+
+    directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+
+    while front < len(queue):
+        row, col, steps = queue[front]
+        front += 1
+
+        if (row, col) == goal:
+            return steps
+
+        for dr, dc in directions:
+            new_row = row + dr
+            new_col = col + dc
+
+            if (
+                0 <= new_row < rows
+                and 0 <= new_col < cols
+                and maze[new_row][new_col] == 0
+                and (new_row, new_col) not in visited
+            ):
+                visited.add((new_row, new_col))
+                queue.append((new_row, new_col, steps + 1))
+
+    return -1
+
+
+# --------------------------------------------------
+# 3. DISPLAY MAZE WITH WIDER CELLS
+# --------------------------------------------------
+
+def display_maze(
+    maze,
+    player_row,
+    player_col,
+    goal_row,
+    goal_col,
+    visible_radius=None
+):
+    rows = len(maze)
+    cols = len(maze[0])
+
+    for row in range(rows):
+        line = ""
+
+        for col in range(cols):
+            if (row, col) == (player_row, player_col):
+                line += "P "
+            elif (row, col) == (goal_row, goal_col):
+                line += "G "
+            elif (
+                visible_radius is not None
+                and abs(row - player_row) + abs(col - player_col)
+                > visible_radius
+            ):
+                line += "? "
+            elif maze[row][col] == 1:
+                line += "# "
+            else:
+                line += "  "
+
+        print(line)
+
+
+# --------------------------------------------------
+# 4. PLAYER MOVEMENT
+# --------------------------------------------------
+
+def player_movement(maze, player_row, player_col, move):
+    directions = {
+        "w": (-1, 0),
+        "s": (1, 0),
+        "a": (0, -1),
+        "d": (0, 1)
+    }
+
+    if move not in directions:
+        return None
+
+    dr, dc = directions[move]
+
+    new_row = player_row + dr
+    new_col = player_col + dc
+
+    rows = len(maze)
+    cols = len(maze[0])
+
+    if (
+        not (0 <= new_row < rows)
+        or not (0 <= new_col < cols)
+        or maze[new_row][new_col] == 1
+    ):
+        return None
+
+    return new_row, new_col
+
+
+# --------------------------------------------------
+# 5. SCORING SYSTEM
+# --------------------------------------------------
+
+def calculate_score(min_steps, actual_moves, elapsed_time, invalid_moves):
+    if actual_moves <= 0 or elapsed_time <= 0 or min_steps < 0:
+        return 0
+
+    move_score = 500 * min_steps / actual_moves
+
+    ideal_time = min_steps / 2
+    time_score = 500 * min(1, ideal_time / elapsed_time)
+
+    invalid_penalty = invalid_moves * 25
+
+    final_score = max(
+        0,
+        round(move_score + time_score - invalid_penalty)
+    )
+
+    return final_score
+
+
+# --------------------------------------------------
+# 6. FOG OF WAR
+# --------------------------------------------------
+
+def get_fog_radius(maze_size):
+    if maze_size < 19:
+        return None
+
+    # 19 -> 9, 21 -> 8, 23 -> 7,
+    # 25 -> 6, 27 and above -> 5.
+    return max(5, 18 - maze_size // 2)
+
+
+# --------------------------------------------------
+# 7. ADAPTIVE DIFFICULTY
+# --------------------------------------------------
+
+def adjust_difficulty(maze_size, score):
+    if score < 500:
+        maze_size -= 2
+    elif score > 800:
+        maze_size += 2
+
+    return max(15, min(51, maze_size))
+
+
+# --------------------------------------------------
+# 8. PLAY ONE ROUND
+# --------------------------------------------------
+
+def play_round(maze_size, round_number):
+    maze = generate_maze(maze_size, maze_size)
+
+    player_row, player_col = 1, 1
+    goal_row, goal_col = maze_size - 2, maze_size - 2
+
+    start = (player_row, player_col)
+    goal = (goal_row, goal_col)
+
+    min_steps = minimum_steps(maze, start, goal)
+    visible_radius = get_fog_radius(maze_size)
+
+    actual_moves = 0
+    invalid_moves = 0
+
+    start_time = time.perf_counter()
+
+    while True:
+        elapsed_time = time.perf_counter() - start_time
+        ideal_time = min_steps / 2
+
+        # Clear the screen.
+        print("\033[H\033[J", end="")
+
+        print("=" * 50)
+        print("                 MAZE GAME")
+        print(f"                 ROUND {round_number}")
+        print("=" * 50)
+
+        print(f"Maze size: {maze_size} x {maze_size}")
+        print("Controls: W = Up | A = Left | S = Down | D = Right")
+        print("Press Q to quit the round.")
+
+        if visible_radius is None:
+            print("Fog: OFF")
+        else:
+            print(f"Fog radius: {visible_radius}")
+
+        print()
+
+        # Display the maze after every move.
+        display_maze(
+            maze,
+            player_row,
+            player_col,
+            goal_row,
+            goal_col,
+            visible_radius
+        )
+
+        print()
+        print("-" * 50)
+        print("Minimum steps:", min_steps)
+        print("Moves taken:", actual_moves)
+        print(f"Ideal time: {ideal_time:.1f} seconds")
+        print(f"Elapsed time: {elapsed_time:.1f} seconds")
+        print("Invalid moves:", invalid_moves)
+        print("Invalid-move penalty:", invalid_moves * 25, "points")
+        print("-" * 50)
+
+        # Check whether the player reached the goal.
+        if (player_row, player_col) == goal:
+            final_score = calculate_score(
+                min_steps,
+                actual_moves,
+                elapsed_time,
+                invalid_moves
+            )
+
+            print("\n" + "=" * 50)
+            print("                MAZE COMPLETED!")
+            print("=" * 50)
+            print("Shortest route:", min_steps, "moves")
+            print("Your moves:", actual_moves)
+            print(f"Time taken: {elapsed_time:.2f} seconds")
+            print("Invalid moves:", invalid_moves)
+            print("FINAL SCORE:", final_score)
+            print("=" * 50)
+
+            return final_score, True
+
+        move = input("\nYour move: ").strip().lower()
+
+        if move == "q":
+            print("\nRound abandoned.")
+            return 0, False
+
+        new_position = player_movement(
+            maze,
+            player_row,
+            player_col,
+            move
+        )
+
+        if new_position is None:
+            invalid_moves += 1
+            continue
+
+        player_row, player_col = new_position
+        actual_moves += 1
+
+
+# --------------------------------------------------
+# 9. MAIN GAME LOOP
+# --------------------------------------------------
+
+def main():
+    maze_size = 15
+    round_number = 1
+    scores = []
+
+    print("=" * 50)
+    print("             WELCOME TO MAZE GAME")
+    print("=" * 50)
+    print("Find the goal (G), starting from P.")
+    print("Avoid walls (#).")
+    print("Question marks (?) indicate hidden cells in fog.")
+    print("Use W, A, S, D to move.")
+    input("\nPress Enter to start...")
+
+    while True:
+        score, completed = play_round(maze_size, round_number)
+
+        if not completed:
+            break
+
+        scores.append(score)
+
+        old_size = maze_size
+        maze_size = adjust_difficulty(maze_size, score)
+
+        print(f"\nPrevious maze size: {old_size} x {old_size}")
+        print(f"Next maze size: {maze_size} x {maze_size}")
+
+        play_again = input(
+            "\nPlay another round? (y/n): "
+        ).strip().lower()
+
+        if play_again != "y":
+            break
+
+        round_number += 1
+
+    # Session summary.
+    print("\n" + "=" * 50)
+    print("               SESSION SUMMARY")
+    print("=" * 50)
+
+    if scores:
+        print("Rounds completed:", len(scores))
+
+        for index, score in enumerate(scores, start=1):
+            print(f"Round {index}: {score} points")
+
+        print("Total score:", sum(scores))
+        print(f"Average score: {sum(scores) / len(scores):.1f}")
+    else:
+        print("No rounds completed.")
+
+    print("\nThanks for playing!")
+
+
+if __name__ == "__main__":
+    main()
